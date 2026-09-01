@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GameDir>D:\Chill with You\Chill with You</GameDir>
+    <GameManagedDir>$(GameDir)\Chill With You_Data\Managed</GameManagedDir>
+    <BepInExDir>D:\Chill with You\.tools\bepinex-5.4.23.5</BepInExDir>
+  </PropertyGroup>
+</Project>

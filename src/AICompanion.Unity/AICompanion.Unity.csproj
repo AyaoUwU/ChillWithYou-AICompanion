@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AICompanion.Unity</AssemblyName>
+    <RootNamespace>AICompanion.Unity</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AICompanion.Core\AICompanion.Core.csproj" />
+    <Reference Include="Assembly-CSharp" HintPath="$(GameManagedDir)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(GameManagedDir)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(GameManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(GameManagedDir)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(GameManagedDir)\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(GameManagedDir)\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(GameManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(GameManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(GameManagedDir)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="StandaloneFileBrowser" HintPath="$(GameManagedDir)\StandaloneFileBrowser.dll" Private="false" />
+    <EmbeddedResource Include="Assets\chat_bubble_outline.png" LogicalName="AICompanion.Unity.Assets.chat_bubble_outline.png" />
+    <EmbeddedResource Include="Assets\chat_bubble_outline.svg" LogicalName="AICompanion.Unity.Assets.chat_bubble_outline.svg" />
+    <EmbeddedResource Include="Assets\THIRD_PARTY_NOTICES.md" LogicalName="AICompanion.Unity.Assets.THIRD_PARTY_NOTICES.md" />
+  </ItemGroup>
+</Project>

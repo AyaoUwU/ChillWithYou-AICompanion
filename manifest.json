@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "local.chillwithyou.aicompanion",
+  "name": "Chill With You AI Companion",
+  "version": "1.0.2",
+  "target": {
+    "platform": "Windows-x64",
+    "unity": "2022.3.62f2",
+    "backend": "Mono",
+    "bepInEx": "5.4.23.5"
+  },
+  "dataPolicy": {
+    "history": "DPAPI CurrentUser encrypted append-only records",
+    "gameSaveWrites": false,
+    "gameAssemblyPatches": false
+  }
+}

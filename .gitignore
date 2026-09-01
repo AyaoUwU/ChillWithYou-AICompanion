@@ -1,0 +1,9 @@
+[Bb]in/
+[Oo]bj/
+dist/
+.vs/
+*.user
+*.suo
+*.nupkg
+TestResults/
+

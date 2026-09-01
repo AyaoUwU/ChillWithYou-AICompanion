@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>AICompanion.Tests</AssemblyName>
+    <RootNamespace>AICompanion.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AICompanion.Core\AICompanion.Core.csproj" />
+    <ProjectReference Include="..\..\src\AICompanion.Infrastructure\AICompanion.Infrastructure.csproj" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(GameManagedDir)\Newtonsoft.Json.dll" Private="true" />
+  </ItemGroup>
+</Project>
