@@ -27,6 +27,7 @@ namespace AICompanion.Unity
         private Action<ApiSettings, string>? _saveSettings;
         private Action<string>? _diagnosticEvent;
         private UiMountPoint? _mount;
+        private GameHudVisibilityLease? _gameHud;
         private GameObject? _openButtonObject;
         private UnityTheme _theme = new UnityTheme();
         private RectTransform? _panel;
@@ -41,6 +42,7 @@ namespace AICompanion.Unity
         private TMP_Text? _dialogueSpeaker;
         private TMP_Text? _dialogueText;
         private TMP_Text? _archiveTitle;
+        private GameObject? _historyPage;
         private CanvasGroup? _panelCanvas;
         private Button? _sendButton;
         private Button? _cancelButton;
@@ -162,6 +164,8 @@ namespace AICompanion.Unity
             if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
             _messageInput?.DeactivateInputField();
             CancelRequested?.Invoke();
+            _gameHud?.Release();
+            UpdateOpenButtonVisibility();
             PlayCancelSound();
         }
 
@@ -203,6 +207,7 @@ namespace AICompanion.Unity
             root.offsetMax = Vector2.zero;
 
             if (_mount == null) throw new InvalidOperationException("A resolved UI mount point is required.");
+            _gameHud = new GameHudVisibilityLease(_mount);
             BuildOpenButton(_mount);
             BuildDialogueOverlay(root);
             BuildPanel(root);
@@ -349,17 +354,17 @@ namespace AICompanion.Unity
             _panelCanvas = _panel.gameObject.AddComponent<CanvasGroup>();
 
             _archiveTitle = CreateText("Title", _panel, "AI 对话记录", 28, TextAlignmentOptions.Left);
-            Place(_archiveTitle.rectTransform, new Vector2(20, -64), new Vector2(-150, -16), new Vector2(0, 1), new Vector2(1, 1));
+            Place(_archiveTitle.rectTransform, new Vector2(20, -64), new Vector2(-80, -16), new Vector2(0, 1), new Vector2(1, 1));
 
-            var settingsButton = CreateButton("Settings", _panel, "设置", new Vector2(74, 40));
-            Place((RectTransform)settingsButton.transform, new Vector2(-150, -56), new Vector2(-72, -16), new Vector2(1, 1), new Vector2(1, 1));
-            settingsButton.onClick.AddListener(ShowSettings);
             var closeButton = CreateButton("Close", _panel, "×", new Vector2(48, 40));
             Place((RectTransform)closeButton.transform, new Vector2(-64, -56), new Vector2(-16, -16), new Vector2(1, 1), new Vector2(1, 1));
             closeButton.onClick.AddListener(HideArchive);
 
-            BuildSearch(_panel);
-            BuildMessages(_panel);
+            _historyPage = CreateRect("HistoryPage", _panel).gameObject;
+            var historyRect = (RectTransform)_historyPage.transform;
+            Place(historyRect, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+            BuildSearch(historyRect);
+            BuildMessages(historyRect);
             BuildSettings(_panel);
         }
 
@@ -453,9 +458,6 @@ namespace AICompanion.Unity
             note.enableWordWrapping = true;
             Place(note.rectTransform, new Vector2(18, -528), new Vector2(-18, -478), new Vector2(0, 1), new Vector2(1, 1));
 
-            var back = CreateButton("SettingsBack", rect, "返回记录", new Vector2(112, 42));
-            Place((RectTransform)back.transform, new Vector2(-130, 16), new Vector2(-18, 58), new Vector2(1, 0), new Vector2(1, 0));
-            back.onClick.AddListener(ShowHistory);
             _settingsPage.SetActive(false);
         }
 
@@ -474,6 +476,8 @@ namespace AICompanion.Unity
             if (_dialogueCanvas == null) return;
             _diagnosticEvent?.Invoke("Open()");
             RefreshTheme();
+            _gameHud?.Acquire();
+            UpdateOpenButtonVisibility();
             SetCanvasVisible(_dialogueCanvas, true);
             if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
             _diagnosticEvent?.Invoke("CanvasGroup alpha=" + _dialogueCanvas.alpha + " blocksRaycasts=" + _dialogueCanvas.blocksRaycasts);
@@ -486,6 +490,8 @@ namespace AICompanion.Unity
         {
             if (_dialogueCanvas != null) SetCanvasVisible(_dialogueCanvas, false);
             if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
+            _gameHud?.Release();
+            UpdateOpenButtonVisibility();
         }
 
         private void SendCurrent()
@@ -633,7 +639,8 @@ namespace AICompanion.Unity
 
         private void ShowHistory()
         {
-            if (_panelCanvas == null || _settingsPage == null) return;
+            if (_panelCanvas == null || _settingsPage == null || _historyPage == null) return;
+            _historyPage.SetActive(true);
             _settingsPage.SetActive(false);
             if (_archiveTitle != null) _archiveTitle.text = "AI 对话记录";
             SetCanvasVisible(_panelCanvas, true);
@@ -642,9 +649,9 @@ namespace AICompanion.Unity
 
         private void ShowSettings()
         {
-            if (_panelCanvas == null || _settingsPage == null) return;
+            if (_panelCanvas == null || _settingsPage == null || _historyPage == null) return;
+            _historyPage.SetActive(false);
             _settingsPage.SetActive(true);
-            _settingsPage.transform.SetAsLastSibling();
             if (_archiveTitle != null) _archiveTitle.text = "AI 设置";
             SetCanvasVisible(_panelCanvas, true);
             PlayClickSound();
@@ -818,11 +825,13 @@ namespace AICompanion.Unity
         {
             if (_lastTickFrame == Time.frameCount) return;
             _lastTickFrame = Time.frameCount;
+            if (IsOpen) _gameHud?.EnforceHidden();
             if (Time.frameCount - _lastButtonLayoutFrame >= 30)
             {
                 _lastButtonLayoutFrame = Time.frameCount;
                 PositionOpenButton();
             }
+            UpdateOpenButtonVisibility();
             if (IsOpen && _messageInput != null && _messageInput.isFocused && Input.GetKeyDown(KeyCode.Return)
                 && !Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift))
             {
@@ -846,10 +855,30 @@ namespace AICompanion.Unity
             Tick();
         }
 
+        private void OnEnable() => Canvas.willRenderCanvases += EnforceVisibilityBeforeRender;
+
+        private void OnDisable() => Canvas.willRenderCanvases -= EnforceVisibilityBeforeRender;
+
+        private void EnforceVisibilityBeforeRender()
+        {
+            if (IsOpen) _gameHud?.EnforceHidden();
+            else UpdateOpenButtonVisibility();
+        }
+
         private void OnDestroy()
         {
+            Canvas.willRenderCanvases -= EnforceVisibilityBeforeRender;
+            _gameHud?.Dispose();
+            _gameHud = null;
             if (_openButtonObject != null) { AiCompanionUiOwnership.Unregister(_openButtonObject); Destroy(_openButtonObject); }
             AiCompanionUiOwnership.Unregister(gameObject);
+        }
+
+        private void UpdateOpenButtonVisibility()
+        {
+            if (_openButtonObject == null || _gameHud == null) return;
+            var visible = !IsOpen && _gameHud.IsOriginalHudVisible();
+            if (_openButtonObject.activeSelf != visible) _openButtonObject.SetActive(visible);
         }
     }
 }
