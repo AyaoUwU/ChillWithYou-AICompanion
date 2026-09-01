@@ -58,6 +58,7 @@ namespace AICompanion.Core
 
     public interface IGameContextProvider
     {
+        GameConversationAvailability GetAvailability();
         bool CanTalk(out string reason);
         GameContextSnapshot Capture();
     }

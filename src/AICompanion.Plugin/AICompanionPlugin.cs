@@ -21,7 +21,7 @@ namespace AICompanion.Plugin
     {
         public const string PluginGuid = "local.chillwithyou.aicompanion";
         public const string PluginName = "Chill With You AI Companion";
-        public const string PluginVersion = "1.1.2";
+        public const string PluginVersion = "1.1.3";
         private ConfigEntry<string>? _baseUrl; private ConfigEntry<string>? _model; private ConfigEntry<int>? _timeout; private ConfigEntry<int>? _maxOutputTokens; private ConfigEntry<string>? _characterProfile; private ConfigEntry<bool>? _uiProbeOnce; private ConfigEntry<bool>? _openDialogueOnce;
         private PluginLogger? _companionLogger; private EncryptedSecretStore? _secrets; private ChatCompletionsClient? _chat; private IConversationStore? _history; private IConversationMemoryStore? _memory; private IContextComposer? _contextComposer; private IContextCompressionService? _compression; private ICharacterPresentationPipeline? _presentation; private UnityGameContextProvider? _gameContext;
         private ConversationOrchestrator? _orchestrator; private AiCompanionPanel? _panel; private IUiRuntimeDriver? _runtimeDriver; private RoomUiMountResolver? _mountResolver; private RoomUiBootstrapper? _bootstrapper; private UnityUiDiagnosticsCollector? _collector; private UiDiagnosticsWriter? _diagnostics; private UiDiagnosticMarkers? _markers; private Harmony? _harmony; private UiMountPoint? _currentMount;
@@ -127,7 +127,15 @@ namespace AICompanion.Plugin
         private void RuntimeTick()
         {
             _panel?.Tick();
-            if (_orchestrator != null && _gameContext != null && _orchestrator.State != ConversationState.Idle && !_gameContext.CanTalk(out _)) { _orchestrator.Cancel(); if (_panel?.IsOpen == true) _panel.Close(); }
+            if (_orchestrator == null || _gameContext == null) return;
+            var availability = _gameContext.GetAvailability();
+            if (!availability.RequiresConversationClose) return;
+            if (_orchestrator.State != ConversationState.Idle) _orchestrator.Cancel();
+            if (_panel?.IsOpen == true)
+            {
+                _diagnostics?.AppendEvent("dialogue closed for hard interruption=" + availability.Blocker);
+                _panel.Close();
+            }
         }
 
         private void RecordUiEvent(string message) { _diagnostics?.AppendEvent("ui " + message); Logger.LogInfo("AI UI event: " + message); }

@@ -15,28 +15,27 @@ namespace AICompanion.Unity
     {
         private RoomGameManager? _room;
 
-        public bool CanTalk(out string reason)
+        public GameConversationAvailability GetAvailability()
         {
             _room = FindRoom();
             if (_room == null)
-            {
-                reason = "AI对话正在等待游戏房间加载。";
-                return false;
-            }
+                return Blocked(GameConversationBlocker.RoomUnavailable, "AI对话正在等待游戏房间加载。");
             var heroine = ReflectionAccess.Field<HeroineService>(_room, "_heroineService");
             var scenario = ReflectionAccess.Field<ScenarioReader>(_room, "_scenarioReader");
             if (scenario != null && scenario.IsPlayingScenario())
-            {
-                reason = "剧情播放期间先听Satone说完吧。";
-                return false;
-            }
-            if (heroine == null || !heroine.IsPossibleTalk() || heroine.IsPlayingPomodoroAction())
-            {
-                reason = "Satone现在正忙，稍后再聊吧。";
-                return false;
-            }
-            reason = string.Empty;
-            return true;
+                return Blocked(GameConversationBlocker.ScenarioPlaying, "剧情播放期间先听Satone说完吧。");
+            if (heroine == null || !heroine.IsPossibleTalk())
+                return Blocked(GameConversationBlocker.CharacterBusy, "Satone现在正忙，稍后再聊吧。");
+            if (heroine.IsPlayingPomodoroAction())
+                return Blocked(GameConversationBlocker.PomodoroAction, "Satone正在进行番茄钟演出，稍后再聊吧。");
+            return new GameConversationAvailability();
+        }
+
+        public bool CanTalk(out string reason)
+        {
+            var availability = GetAvailability();
+            reason = availability.Reason;
+            return availability.CanStartConversation;
         }
 
         public GameContextSnapshot Capture()
@@ -63,6 +62,9 @@ namespace AICompanion.Unity
 
         public RoomGameManager? CurrentRoom => _room ?? FindRoom();
         public HeroineService? CurrentHeroine => ReflectionAccess.Field<HeroineService>(CurrentRoom, "_heroineService");
+
+        private static GameConversationAvailability Blocked(GameConversationBlocker blocker, string reason)
+            => new GameConversationAvailability { Blocker = blocker, Reason = reason };
 
         private RoomGameManager? FindRoom()
         {

@@ -17,6 +17,16 @@ namespace AICompanion.Core
     public enum ChatRole { User, Assistant, System }
     public enum CharacterEmotion { Neutral, Joy, Fun, Shy, Sad, Anger, Surprise, Thinking }
     public enum CharacterAction { None, Nod, ShakeHead, Think, Cheer, Shy, Distress }
+    public enum GameConversationBlocker { None, RoomUnavailable, ScenarioPlaying, CharacterBusy, PomodoroAction }
+
+    public sealed class GameConversationAvailability
+    {
+        public GameConversationBlocker Blocker { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public bool CanStartConversation => Blocker == GameConversationBlocker.None;
+        public bool RequiresConversationClose => Blocker == GameConversationBlocker.RoomUnavailable
+            || Blocker == GameConversationBlocker.ScenarioPlaying;
+    }
 
     public sealed class SpeechHint
     {

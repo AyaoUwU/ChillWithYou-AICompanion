@@ -26,6 +26,7 @@ namespace AICompanion.Tests
             await Run("100k hierarchy compression preserves history", HierarchyCompression);
             await Run("Chat Completions request and structured reply", ChatCompletionsRoundTrip);
             await Run("Chat Completions reply compatibility", ChatCompletionsReplyCompatibility);
+            await Run("Transient character actions keep dialogue open", ConversationInterruptionPolicy);
             await Run("Null voice/lip-sync contracts", NullVoiceContracts);
             await Run("Right toolbar mount selection", RightToolbarMountSelection);
             await Run("UI diagnostics report persistence", UiDiagnosticsPersistence);
@@ -132,6 +133,19 @@ namespace AICompanion.Tests
             var wrapped = ChatCompletionsClient.ParseCharacterReply("这是回复：{\"text\":\"我在这里。\",\"emotion\":\"joy\",\"action\":\"cheer\"}");
             Assert(wrapped.Text == "我在这里。" && wrapped.Emotion == CharacterEmotion.Joy && wrapped.Action == CharacterAction.Cheer,
                 "wrapped JSON reply parse failed");
+            return Task.CompletedTask;
+        }
+
+        private static Task ConversationInterruptionPolicy()
+        {
+            Assert(!new GameConversationAvailability { Blocker = GameConversationBlocker.CharacterBusy }.RequiresConversationClose,
+                "ordinary character action would close dialogue");
+            Assert(!new GameConversationAvailability { Blocker = GameConversationBlocker.PomodoroAction }.RequiresConversationClose,
+                "pomodoro animation would close dialogue");
+            Assert(new GameConversationAvailability { Blocker = GameConversationBlocker.ScenarioPlaying }.RequiresConversationClose,
+                "story playback must close dialogue");
+            Assert(new GameConversationAvailability { Blocker = GameConversationBlocker.RoomUnavailable }.RequiresConversationClose,
+                "leaving the room must close dialogue");
             return Task.CompletedTask;
         }
 
