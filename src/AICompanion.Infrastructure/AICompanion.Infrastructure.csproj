@@ -6,5 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="..\AICompanion.Core\AICompanion.Core.csproj" />
     <Reference Include="Newtonsoft.Json" HintPath="$(GameManagedDir)\Newtonsoft.Json.dll" Private="false" />
+    <InternalsVisibleTo Include="AICompanion.Tests" />
   </ItemGroup>
 </Project>

@@ -28,20 +28,38 @@ namespace AICompanion.Infrastructure
         public async Task<CharacterReplyV1> SendAsync(ChatRequest request, CancellationToken cancellationToken)
         {
             var content = await CompleteAsync(request.Messages, request.Model, true, cancellationToken).ConfigureAwait(false);
-            var json = StripCodeFence(content);
-            JObject parsed;
-            try { parsed = JObject.Parse(json); }
-            catch (JsonException ex) { throw new InvalidOperationException("AI returned invalid JSON.", ex); }
+            return ParseCharacterReply(content);
+        }
 
-            var text = (string?)parsed["text"] ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("AI returned an empty response.");
+        internal static CharacterReplyV1 ParseCharacterReply(string content)
+        {
+            var normalized = StripCodeFence(content ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(normalized)) throw new InvalidOperationException("AI returned an empty response.");
+
+            var parsed = TryParseReplyObject(normalized);
+            var text = (string?)parsed?["text"] ?? (string?)parsed?["message"] ?? (string?)parsed?["content"];
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return new CharacterReplyV1
+                {
+                    SchemaVersion = 1,
+                    Text = text.Trim(),
+                    Emotion = ParseEmotion((string?)parsed!["emotion"]),
+                    Action = ParseAction((string?)parsed["action"]),
+                    SpeechHint = ParseSpeechHint(parsed["speechHint"] as JObject)
+                };
+            }
+            if (parsed != null) throw new InvalidOperationException("AI returned a JSON response without dialogue text.");
+
+            // Some Chat Completions-compatible models ignore the requested JSON shape and
+            // return the actual dialogue as plain text. The text is still a valid reply; only
+            // optional presentation metadata is unavailable.
             return new CharacterReplyV1
             {
                 SchemaVersion = 1,
-                Text = text.Trim(),
-                Emotion = ParseEmotion((string?)parsed["emotion"]),
-                Action = ParseAction((string?)parsed["action"]),
-                SpeechHint = ParseSpeechHint(parsed["speechHint"] as JObject)
+                Text = normalized.Trim(),
+                Emotion = CharacterEmotion.Neutral,
+                Action = CharacterAction.None
             };
         }
 
@@ -98,10 +116,49 @@ namespace AICompanion.Infrastructure
                     var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode) throw new InvalidOperationException(((int)response.StatusCode) + " AI request failed.");
                     var root = JObject.Parse(responseText);
-                    var content = (string?)root["choices"]?[0]?["message"]?["content"];
+                    var content = ExtractMessageContent(root);
                     if (string.IsNullOrWhiteSpace(content)) throw new InvalidOperationException("AI response did not contain message content.");
                     return content.Trim();
                 }
+            }
+        }
+
+        private static string? ExtractMessageContent(JObject root)
+        {
+            var token = root["choices"]?[0]?["message"]?["content"] ?? root["choices"]?[0]?["text"];
+            if (token == null || token.Type == JTokenType.Null) return null;
+            if (token.Type == JTokenType.String) return (string?)token;
+            if (token is JArray parts)
+            {
+                var texts = parts.Select(part => part.Type == JTokenType.String
+                    ? (string?)part
+                    : (string?)part["text"]).Where(x => !string.IsNullOrWhiteSpace(x));
+                return string.Join(string.Empty, texts);
+            }
+            return null;
+        }
+
+        private static JObject? TryParseReplyObject(string content)
+        {
+            if (TryParseObject(content, out var parsed)) return parsed;
+            var firstBrace = content.IndexOf('{');
+            var lastBrace = content.LastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace
+                && TryParseObject(content.Substring(firstBrace, lastBrace - firstBrace + 1), out parsed)) return parsed;
+            return null;
+        }
+
+        private static bool TryParseObject(string value, out JObject? parsed)
+        {
+            try
+            {
+                parsed = JObject.Parse(value);
+                return true;
+            }
+            catch (JsonException)
+            {
+                parsed = null;
+                return false;
             }
         }
 

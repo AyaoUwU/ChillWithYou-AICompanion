@@ -25,6 +25,7 @@ namespace AICompanion.Tests
             await Run("Encrypted history append/page/search/export/tail recovery", EncryptedHistory);
             await Run("100k hierarchy compression preserves history", HierarchyCompression);
             await Run("Chat Completions request and structured reply", ChatCompletionsRoundTrip);
+            await Run("Chat Completions reply compatibility", ChatCompletionsReplyCompatibility);
             await Run("Null voice/lip-sync contracts", NullVoiceContracts);
             await Run("Right toolbar mount selection", RightToolbarMountSelection);
             await Run("UI diagnostics report persistence", UiDiagnosticsPersistence);
@@ -116,6 +117,22 @@ namespace AICompanion.Tests
                 Assert(server.Authorization == "Bearer test-key", "authorization header missing");
             }
             finally { DeleteTempDirectory(temp); }
+        }
+
+        private static Task ChatCompletionsReplyCompatibility()
+        {
+            var plain = ChatCompletionsClient.ParseCharacterReply("咖啡听起来很不错，要一起慢慢享用吗？");
+            Assert(plain.Text.StartsWith("咖啡") && plain.Emotion == CharacterEmotion.Neutral && plain.Action == CharacterAction.None,
+                "plain-text reply fallback failed");
+
+            var fenced = ChatCompletionsClient.ParseCharacterReply("```json\n{\"text\":\"晚上好。\",\"emotion\":\"shy\",\"action\":\"nod\"}\n```");
+            Assert(fenced.Text == "晚上好。" && fenced.Emotion == CharacterEmotion.Shy && fenced.Action == CharacterAction.Nod,
+                "fenced JSON reply parse failed");
+
+            var wrapped = ChatCompletionsClient.ParseCharacterReply("这是回复：{\"text\":\"我在这里。\",\"emotion\":\"joy\",\"action\":\"cheer\"}");
+            Assert(wrapped.Text == "我在这里。" && wrapped.Emotion == CharacterEmotion.Joy && wrapped.Action == CharacterAction.Cheer,
+                "wrapped JSON reply parse failed");
+            return Task.CompletedTask;
         }
 
         private static async Task NullVoiceContracts()
