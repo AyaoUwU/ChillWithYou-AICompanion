@@ -21,8 +21,8 @@ namespace AICompanion.Plugin
     {
         public const string PluginGuid = "local.chillwithyou.aicompanion";
         public const string PluginName = "Chill With You AI Companion";
-        public const string PluginVersion = "1.0.2";
-        private ConfigEntry<string>? _baseUrl; private ConfigEntry<string>? _model; private ConfigEntry<int>? _timeout; private ConfigEntry<int>? _maxOutputTokens; private ConfigEntry<string>? _characterProfile; private ConfigEntry<bool>? _uiProbeOnce;
+        public const string PluginVersion = "1.1.0";
+        private ConfigEntry<string>? _baseUrl; private ConfigEntry<string>? _model; private ConfigEntry<int>? _timeout; private ConfigEntry<int>? _maxOutputTokens; private ConfigEntry<string>? _characterProfile; private ConfigEntry<bool>? _uiProbeOnce; private ConfigEntry<bool>? _openDialogueOnce;
         private PluginLogger? _companionLogger; private EncryptedSecretStore? _secrets; private ChatCompletionsClient? _chat; private IConversationStore? _history; private IConversationMemoryStore? _memory; private IContextComposer? _contextComposer; private IContextCompressionService? _compression; private ICharacterPresentationPipeline? _presentation; private UnityGameContextProvider? _gameContext;
         private ConversationOrchestrator? _orchestrator; private AiCompanionPanel? _panel; private IUiRuntimeDriver? _runtimeDriver; private RoomUiMountResolver? _mountResolver; private RoomUiBootstrapper? _bootstrapper; private UnityUiDiagnosticsCollector? _collector; private UiDiagnosticsWriter? _diagnostics; private UiDiagnosticMarkers? _markers; private Harmony? _harmony; private UiMountPoint? _currentMount;
         private string _dataDirectory = string.Empty; private string _buildId = string.Empty; private int _diagnosticMountFrame = -1; private float _diagnosticMountRealtime; private bool _screenshotRequested; private int _lastFallbackFrame = -1000; private bool _runtimeRearmed; private static AICompanionPlugin? _instance;
@@ -81,6 +81,13 @@ namespace AICompanion.Plugin
             DisposeConversationUi(); _currentMount = mount; EnsureConversationUi(mount);
             _diagnostics?.AppendEvent("mount signal=" + signal.Kind + " canvas=" + mount.CanvasPath + " toolbar=" + mount.ToolbarPath + " target=" + mount.TargetScreenCenter);
             Logger.LogInfo("AI UI mount resolved: canvas=" + mount.CanvasPath + ", toolbar=" + mount.ToolbarPath + ", reference=" + mount.ReferenceButtonPath + ".");
+            if (_openDialogueOnce?.Value == true && signal.Scene == "RoomScene")
+            {
+                _panel?.OpenForDiagnostics();
+                _openDialogueOnce.Value = false;
+                Config.Save();
+                _diagnostics?.AppendEvent("dialogue auto-opened by one-time diagnostic switch");
+            }
             if (_uiProbeOnce?.Value == true && signal.Scene == "RoomScene") { _markers = new UiDiagnosticMarkers(mount); _diagnosticMountFrame = signal.Frame; _diagnosticMountRealtime = Time.realtimeSinceStartup; }
             WriteDiagnosticsReport();
         }
@@ -142,7 +149,7 @@ namespace AICompanion.Plugin
 
         private void BindConfiguration()
         {
-            _baseUrl = Config.Bind("AI", "BaseUrl", "https://api.openai.com", "HTTPS base URL for a Chat Completions-compatible API."); _model = Config.Bind("AI", "Model", "gpt-4.1-mini", "Model identifier sent to the configured API."); _timeout = Config.Bind("AI", "TimeoutSeconds", 60, new ConfigDescription("Network timeout.", new AcceptableValueRange<int>(10, 180))); _maxOutputTokens = Config.Bind("AI", "MaxOutputTokens", 300, new ConfigDescription("Maximum response tokens.", new AcceptableValueRange<int>(100, 1000))); _characterProfile = Config.Bind("Character", "Profile", string.Empty, "Optional custom Satone character profile. Empty uses the built-in profile."); _uiProbeOnce = Config.Bind("Diagnostics", "UiProbeOnce", false, "Create one-time A/B UI markers, hierarchy report and local screenshot, then reset to false.");
+            _baseUrl = Config.Bind("AI", "BaseUrl", "https://api.openai.com", "HTTPS base URL for a Chat Completions-compatible API."); _model = Config.Bind("AI", "Model", "gpt-4.1-mini", "Model identifier sent to the configured API."); _timeout = Config.Bind("AI", "TimeoutSeconds", 60, new ConfigDescription("Network timeout.", new AcceptableValueRange<int>(10, 180))); _maxOutputTokens = Config.Bind("AI", "MaxOutputTokens", 300, new ConfigDescription("Maximum response tokens.", new AcceptableValueRange<int>(100, 1000))); _characterProfile = Config.Bind("Character", "Profile", string.Empty, "Optional custom Satone character profile. Empty uses the built-in profile."); _uiProbeOnce = Config.Bind("Diagnostics", "UiProbeOnce", false, "Create one-time A/B UI markers, hierarchy report and local screenshot, then reset to false."); _openDialogueOnce = Config.Bind("Diagnostics", "OpenDialogueOnce", false, "Open the AI dialogue once after entering the room, then reset to false.");
         }
         private ApiSettings CurrentSettings() => new ApiSettings { BaseUrl = _baseUrl?.Value ?? "https://api.openai.com", Model = _model?.Value ?? "gpt-4.1-mini", TimeoutSeconds = _timeout?.Value ?? 60, MaxOutputTokens = _maxOutputTokens?.Value ?? 300, CharacterProfile = _characterProfile?.Value ?? string.Empty };
         private void SaveSettings(ApiSettings settings, string apiKey) { if (_baseUrl != null) _baseUrl.Value = settings.BaseUrl; if (_model != null) _model.Value = settings.Model; if (_timeout != null) _timeout.Value = settings.TimeoutSeconds; if (_maxOutputTokens != null) _maxOutputTokens.Value = settings.MaxOutputTokens; Config.Save(); if (!string.IsNullOrWhiteSpace(apiKey)) _secrets?.SaveApiKey(apiKey.Trim()); }

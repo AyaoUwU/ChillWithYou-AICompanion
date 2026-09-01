@@ -21,6 +21,13 @@ namespace AICompanion.Unity
         public Color MutedTextColor { get; set; } = new Color(0.68f, 0.70f, 0.72f, 1f);
         public Color ActiveColor { get; set; } = new Color(0.78f, 0.67f, 0.55f, 1f);
         public Color DisabledColor { get; set; } = new Color(0.35f, 0.36f, 0.38f, 0.65f);
+        public Sprite? DialogueBackgroundSprite { get; set; }
+        public Material? DialogueBackgroundMaterial { get; set; }
+        public Color DialogueBackgroundColor { get; set; } = new Color(0.03f, 0.035f, 0.055f, 0.94f);
+        public TMP_FontAsset? DialogueFont { get; set; }
+        public Material? DialogueFontMaterial { get; set; }
+        public Color DialogueTextColor { get; set; } = Color.white;
+        public float DialogueFontSize { get; set; } = 30f;
     }
 
     public static class UnityThemeAdapter
@@ -39,6 +46,31 @@ namespace AICompanion.Unity
 
             var wantTalk = Resources.FindObjectsOfTypeAll<WantTalkUI>().FirstOrDefault(x => x != null && x.gameObject.scene.IsValid());
             theme.TalkButtonSprite = ReflectionAccess.Field(wantTalk, "_wantTalkNormalSprite") as Sprite;
+
+            var storyUi = Resources.FindObjectsOfTypeAll<StorySystemUI>()
+                .FirstOrDefault(x => x != null && x.gameObject.scene.IsValid());
+            var bottomBack = ReflectionAccess.Field<Image>(storyUi, "_bottomBackImage");
+            if (bottomBack != null)
+            {
+                theme.DialogueBackgroundSprite = bottomBack.sprite;
+                theme.DialogueBackgroundMaterial = bottomBack.material;
+                theme.DialogueBackgroundColor = bottomBack.color;
+            }
+            var normalMessage = ReflectionAccess.Field(storyUi, "_normalTextMessage");
+            var storyText = ReflectionAccess.Field<TMP_Text>(normalMessage, "_textMessage");
+            if (storyText != null)
+            {
+                theme.DialogueFont = storyText.font;
+                theme.DialogueFontMaterial = storyText.fontSharedMaterial;
+                theme.DialogueTextColor = storyText.color;
+                theme.DialogueFontSize = Mathf.Clamp(storyText.fontSize, 24f, 38f);
+            }
+            else
+            {
+                theme.DialogueFont = theme.Font;
+                theme.DialogueFontMaterial = theme.FontMaterial;
+                theme.DialogueTextColor = theme.TextColor;
+            }
 
             var sideButton = Resources.FindObjectsOfTypeAll<Button>()
                 .Where(x => x != null && x.gameObject.scene.IsValid() && x.gameObject.activeInHierarchy)

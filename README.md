@@ -12,6 +12,8 @@ Run `build.ps1`. The script expects the paths configured in `Directory.Build.pro
 
 Run `install.ps1`, then start the game once. Configure an HTTPS Chat Completions-compatible endpoint, model, and API key in the in-game AI panel.
 
+Version 1.1 uses the game's story-dialogue visual resources for a bottom-screen conversation overlay. The toolbar speech-bubble button opens the overlay; history and settings remain available from its compact controls.
+
 ## Remove
 
 Run `uninstall.ps1`. It removes only the AI Companion plugin and leaves BepInEx in place so other mods are not affected. Encrypted history is retained unless `-RemoveEncryptedData` is supplied.

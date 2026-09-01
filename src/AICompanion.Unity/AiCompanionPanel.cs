@@ -18,7 +18,7 @@ namespace AICompanion.Unity
     {
         private const int VisibleMessageLimit = 120;
         private const int OverlaySortingOrder = 32000;
-        private static readonly Vector2 OpenButtonSize = new Vector2(72, 72);
+        private static readonly Vector2 OpenButtonSize = new Vector2(88, 88);
         private IConversationStore? _history;
         private IConversationMemoryStore? _memory;
         private IChatClient? _chat;
@@ -35,6 +35,12 @@ namespace AICompanion.Unity
         private Image? _openButtonRing;
         private Image? _panelBackground;
         private Image? _settingsBackground;
+        private RectTransform? _dialogueRoot;
+        private Image? _dialogueBackground;
+        private CanvasGroup? _dialogueCanvas;
+        private TMP_Text? _dialogueSpeaker;
+        private TMP_Text? _dialogueText;
+        private TMP_Text? _archiveTitle;
         private CanvasGroup? _panelCanvas;
         private Button? _sendButton;
         private Button? _cancelButton;
@@ -92,7 +98,7 @@ namespace AICompanion.Unity
             return panel;
         }
 
-        public bool IsOpen => _panelCanvas != null && _panelCanvas.alpha > 0.01f;
+        public bool IsOpen => _dialogueCanvas != null && _dialogueCanvas.alpha > 0.01f;
         public void OpenForDiagnostics() => Open();
 
         public string GetRenderDiagnostics()
@@ -137,6 +143,7 @@ namespace AICompanion.Unity
                 _settingsBackground.type = _theme.PanelSprite == null ? Image.Type.Simple : Image.Type.Sliced;
                 _settingsBackground.color = new Color(_theme.PanelColor.r, _theme.PanelColor.g, _theme.PanelColor.b, 0.99f);
             }
+            ApplyDialogueTheme();
             foreach (var button in GetComponentsInChildren<Button>(true))
             {
                 if (_openButtonImage != null && button.gameObject == _openButtonImage.gameObject) continue;
@@ -150,10 +157,10 @@ namespace AICompanion.Unity
 
         public void Close()
         {
-            if (_panelCanvas == null) return;
-            _panelCanvas.alpha = 0f;
-            _panelCanvas.interactable = false;
-            _panelCanvas.blocksRaycasts = false;
+            if (_dialogueCanvas == null) return;
+            SetCanvasVisible(_dialogueCanvas, false);
+            if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
+            _messageInput?.DeactivateInputField();
             CancelRequested?.Invoke();
             PlayCancelSound();
         }
@@ -164,24 +171,18 @@ namespace AICompanion.Unity
             if (_sendButton != null) _sendButton.interactable = state == ConversationState.Idle;
             if (_cancelButton != null) _cancelButton.gameObject.SetActive(state != ConversationState.Idle);
             if (_status != null) _status.text = StateLabel(state);
+            if (_dialogueSpeaker != null) _dialogueSpeaker.text = "Satone";
         }
 
-        public void AddMessage(ChatMessage message, bool animate) => RenderMessage(message, animate, false);
+        public void AddMessage(ChatMessage message, bool animate)
+        {
+            RenderMessage(message, false, false);
+        }
 
         public async Task TypeAssistantReplyAsync(ChatMessage message, CancellationToken cancellationToken)
         {
-            var text = RenderMessage(message, true, false);
-            if (text == null) return;
-            text.maxVisibleCharacters = 0;
-            text.ForceMeshUpdate();
-            var count = text.textInfo.characterCount;
-            for (var i = 1; i <= count; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                text.maxVisibleCharacters = i;
-                await Task.Delay(24, cancellationToken);
-            }
-            text.maxVisibleCharacters = int.MaxValue;
+            RenderMessage(message, false, false);
+            await FadeDialogueTextAsync(message.Content, cancellationToken);
         }
 
         public void ShowError(string message)
@@ -189,6 +190,7 @@ namespace AICompanion.Unity
             if (_status == null) return;
             _status.text = message;
             _status.color = new Color(0.94f, 0.58f, 0.54f, 1f);
+            if (_dialogueText != null) _dialogueText.text = message;
         }
 
         private void Build()
@@ -202,6 +204,7 @@ namespace AICompanion.Unity
 
             if (_mount == null) throw new InvalidOperationException("A resolved UI mount point is required.");
             BuildOpenButton(_mount);
+            BuildDialogueOverlay(root);
             BuildPanel(root);
             SetState(ConversationState.Idle);
             CloseWithoutSound();
@@ -225,7 +228,7 @@ namespace AICompanion.Unity
             image.color = AiCompanionIconFactory.NormalBackground;
             var label = button.GetComponentInChildren<TMP_Text>(true);
             if (label != null) label.gameObject.SetActive(false);
-            _openButtonRing = CreateIconLayer("HoverRing", rect, AiCompanionIconFactory.HoverRing, Color.clear, 72f);
+            _openButtonRing = CreateIconLayer("HoverRing", rect, AiCompanionIconFactory.HoverRing, Color.clear, 88f);
             _openButtonRing.transform.SetSiblingIndex(0);
             _openButtonIcon = CreateIconLayer("ChatBubble", rect, AiCompanionIconFactory.ChatBubble, AiCompanionIconFactory.IconColor, 38f);
             button.GetComponent<UiInteractionFeedback>()?.ConfigureIcon(_openButtonIcon, _openButtonRing, _theme.Font, _theme.FontMaterial, "打开 AI 陪伴对话");
@@ -261,6 +264,78 @@ namespace AICompanion.Unity
                 _openButtonImage.rectTransform.anchoredPosition = local;
         }
 
+        private void BuildDialogueOverlay(RectTransform root)
+        {
+            _dialogueRoot = CreateRect("DialogueOverlay", root);
+            _dialogueRoot.anchorMin = new Vector2(0f, 0f);
+            _dialogueRoot.anchorMax = new Vector2(1f, 0f);
+            _dialogueRoot.pivot = new Vector2(0.5f, 0f);
+            _dialogueRoot.offsetMin = Vector2.zero;
+            _dialogueRoot.offsetMax = new Vector2(0f, 300f);
+
+            _dialogueBackground = _dialogueRoot.gameObject.AddComponent<Image>();
+            _dialogueBackground.raycastTarget = true;
+            _dialogueCanvas = _dialogueRoot.gameObject.AddComponent<CanvasGroup>();
+
+            _dialogueSpeaker = CreateText("Speaker", _dialogueRoot, "Satone", 20f, TextAlignmentOptions.Center);
+            Place(_dialogueSpeaker.rectTransform, new Vector2(340f, 220f), new Vector2(-340f, 254f), Vector2.zero, new Vector2(1f, 0f));
+
+            _dialogueText = CreateText("DialogueText", _dialogueRoot, "想和我聊些什么？", 30f, TextAlignmentOptions.Center);
+            _dialogueText.enableWordWrapping = true;
+            _dialogueText.overflowMode = TextOverflowModes.Ellipsis;
+            Place(_dialogueText.rectTransform, new Vector2(280f, 112f), new Vector2(-280f, 220f), Vector2.zero, new Vector2(1f, 0f));
+
+            _messageInput = CreateInput("MessageInput", _dialogueRoot, "想对 Satone 说些什么…", false);
+            _messageInput.characterLimit = 2000;
+            Place((RectTransform)_messageInput.transform, new Vector2(300f, 26f), new Vector2(-430f, 76f), Vector2.zero, new Vector2(1f, 0f));
+
+            _sendButton = CreateButton("Send", _dialogueRoot, "发送", new Vector2(112f, 50f));
+            Place((RectTransform)_sendButton.transform, new Vector2(-412f, 26f), new Vector2(-300f, 76f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            _sendButton.onClick.AddListener(SendCurrent);
+
+            _cancelButton = CreateButton("Cancel", _dialogueRoot, "取消", new Vector2(94f, 40f));
+            Place((RectTransform)_cancelButton.transform, new Vector2(-288f, 31f), new Vector2(-194f, 71f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            _cancelButton.onClick.AddListener(() => CancelRequested?.Invoke());
+
+            _status = CreateText("Status", _dialogueRoot, string.Empty, 16f, TextAlignmentOptions.Left);
+            _status.color = _theme.MutedTextColor;
+            Place(_status.rectTransform, new Vector2(300f, 78f), new Vector2(-430f, 104f), Vector2.zero, new Vector2(1f, 0f));
+
+            var historyButton = CreateButton("OpenHistory", _dialogueRoot, "记录", new Vector2(82f, 38f));
+            Place((RectTransform)historyButton.transform, new Vector2(-330f, -58f), new Vector2(-248f, -20f), Vector2.one, Vector2.one);
+            historyButton.onClick.AddListener(ShowHistory);
+
+            var settingsButton = CreateButton("OpenSettings", _dialogueRoot, "设置", new Vector2(82f, 38f));
+            Place((RectTransform)settingsButton.transform, new Vector2(-236f, -58f), new Vector2(-154f, -20f), Vector2.one, Vector2.one);
+            settingsButton.onClick.AddListener(ShowSettings);
+
+            var closeButton = CreateButton("CloseDialogue", _dialogueRoot, "关闭", new Vector2(92f, 38f));
+            Place((RectTransform)closeButton.transform, new Vector2(-142f, -58f), new Vector2(-50f, -20f), Vector2.one, Vector2.one);
+            closeButton.onClick.AddListener(Close);
+
+            ApplyDialogueTheme();
+        }
+
+        private void ApplyDialogueTheme()
+        {
+            if (_dialogueBackground != null)
+            {
+                _dialogueBackground.sprite = _theme.DialogueBackgroundSprite ?? _theme.PanelSprite;
+                _dialogueBackground.material = _theme.DialogueBackgroundMaterial;
+                _dialogueBackground.type = _dialogueBackground.sprite == null ? Image.Type.Simple : Image.Type.Sliced;
+                var source = _theme.DialogueBackgroundColor;
+                _dialogueBackground.color = source.a > 0.15f ? source : new Color(0.03f, 0.035f, 0.055f, 0.94f);
+            }
+            foreach (var text in new[] { _dialogueSpeaker, _dialogueText })
+            {
+                if (text == null) continue;
+                if (_theme.DialogueFont != null) text.font = _theme.DialogueFont;
+                if (_theme.DialogueFontMaterial != null) text.fontSharedMaterial = _theme.DialogueFontMaterial;
+                text.color = _theme.DialogueTextColor.a > 0.2f ? _theme.DialogueTextColor : Color.white;
+            }
+            if (_dialogueText != null) _dialogueText.fontSize = _theme.DialogueFontSize;
+        }
+
         private void BuildPanel(RectTransform root)
         {
             _panel = CreateRect("Panel", root);
@@ -273,28 +348,19 @@ namespace AICompanion.Unity
             _panelBackground.color = _theme.PanelColor;
             _panelCanvas = _panel.gameObject.AddComponent<CanvasGroup>();
 
-            var title = CreateText("Title", _panel, "和 Satone 聊聊", 28, TextAlignmentOptions.Left);
-            Place(title.rectTransform, new Vector2(20, -64), new Vector2(-150, -16), new Vector2(0, 1), new Vector2(1, 1));
+            _archiveTitle = CreateText("Title", _panel, "AI 对话记录", 28, TextAlignmentOptions.Left);
+            Place(_archiveTitle.rectTransform, new Vector2(20, -64), new Vector2(-150, -16), new Vector2(0, 1), new Vector2(1, 1));
 
             var settingsButton = CreateButton("Settings", _panel, "设置", new Vector2(74, 40));
             Place((RectTransform)settingsButton.transform, new Vector2(-150, -56), new Vector2(-72, -16), new Vector2(1, 1), new Vector2(1, 1));
-            settingsButton.onClick.AddListener(ToggleSettings);
+            settingsButton.onClick.AddListener(ShowSettings);
             var closeButton = CreateButton("Close", _panel, "×", new Vector2(48, 40));
             Place((RectTransform)closeButton.transform, new Vector2(-64, -56), new Vector2(-16, -16), new Vector2(1, 1), new Vector2(1, 1));
-            closeButton.onClick.AddListener(Close);
+            closeButton.onClick.AddListener(HideArchive);
 
             BuildSearch(_panel);
             BuildMessages(_panel);
-            BuildComposer(_panel);
             BuildSettings(_panel);
-
-            _status = CreateText("Status", _panel, string.Empty, 17, TextAlignmentOptions.Left);
-            _status.color = _theme.MutedTextColor;
-            Place(_status.rectTransform, new Vector2(20, 14), new Vector2(-170, 42), new Vector2(0, 0), new Vector2(1, 0));
-
-            _cancelButton = CreateButton("Cancel", _panel, "取消", new Vector2(76, 38));
-            Place((RectTransform)_cancelButton.transform, new Vector2(-160, 10), new Vector2(-84, 48), new Vector2(1, 0), new Vector2(1, 0));
-            _cancelButton.onClick.AddListener(() => CancelRequested?.Invoke());
         }
 
         private void BuildSearch(RectTransform parent)
@@ -310,7 +376,7 @@ namespace AICompanion.Unity
         private void BuildMessages(RectTransform parent)
         {
             var viewport = CreateRect("MessageViewport", parent);
-            Place(viewport, new Vector2(20, 152), new Vector2(-20, -124), Vector2.zero, Vector2.one);
+            Place(viewport, new Vector2(20, 28), new Vector2(-20, -124), Vector2.zero, Vector2.one);
             var viewportImage = viewport.gameObject.AddComponent<Image>();
             viewportImage.color = new Color(0, 0, 0, 0.14f);
             viewport.gameObject.AddComponent<RectMask2D>();
@@ -340,15 +406,6 @@ namespace AICompanion.Unity
 
             var older = CreateButton("LoadOlder", _messageContent, "加载更早的记录", new Vector2(0, 36));
             older.onClick.AddListener(() => _ = LoadOlderAsync());
-        }
-
-        private void BuildComposer(RectTransform parent)
-        {
-            _messageInput = CreateInput("MessageInput", parent, "想对Satone说些什么…", true);
-            Place((RectTransform)_messageInput.transform, new Vector2(20, 58), new Vector2(-112, 140), Vector2.zero, new Vector2(1, 0));
-            _sendButton = CreateButton("Send", parent, "发送", new Vector2(80, 82));
-            Place((RectTransform)_sendButton.transform, new Vector2(-100, 58), new Vector2(-20, 140), new Vector2(1, 0), new Vector2(1, 0));
-            _sendButton.onClick.AddListener(SendCurrent);
         }
 
         private void BuildSettings(RectTransform parent)
@@ -396,9 +453,9 @@ namespace AICompanion.Unity
             note.enableWordWrapping = true;
             Place(note.rectTransform, new Vector2(18, -528), new Vector2(-18, -478), new Vector2(0, 1), new Vector2(1, 1));
 
-            var back = CreateButton("SettingsBack", rect, "返回聊天", new Vector2(112, 42));
+            var back = CreateButton("SettingsBack", rect, "返回记录", new Vector2(112, 42));
             Place((RectTransform)back.transform, new Vector2(-130, 16), new Vector2(-18, 58), new Vector2(1, 0), new Vector2(1, 0));
-            back.onClick.AddListener(ToggleSettings);
+            back.onClick.AddListener(ShowHistory);
             _settingsPage.SetActive(false);
         }
 
@@ -414,13 +471,12 @@ namespace AICompanion.Unity
 
         private void Open()
         {
-            if (_panelCanvas == null) return;
+            if (_dialogueCanvas == null) return;
             _diagnosticEvent?.Invoke("Open()");
             RefreshTheme();
-            _panelCanvas.alpha = 1f;
-            _panelCanvas.interactable = true;
-            _panelCanvas.blocksRaycasts = true;
-            _diagnosticEvent?.Invoke("CanvasGroup alpha=" + _panelCanvas.alpha + " blocksRaycasts=" + _panelCanvas.blocksRaycasts);
+            SetCanvasVisible(_dialogueCanvas, true);
+            if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
+            _diagnosticEvent?.Invoke("CanvasGroup alpha=" + _dialogueCanvas.alpha + " blocksRaycasts=" + _dialogueCanvas.blocksRaycasts);
             _settingsPage?.SetActive(false);
             PlayClickSound();
             _ = LoadInitialHistoryAsync();
@@ -428,10 +484,8 @@ namespace AICompanion.Unity
 
         private void CloseWithoutSound()
         {
-            if (_panelCanvas == null) return;
-            _panelCanvas.alpha = 0f;
-            _panelCanvas.interactable = false;
-            _panelCanvas.blocksRaycasts = false;
+            if (_dialogueCanvas != null) SetCanvasVisible(_dialogueCanvas, false);
+            if (_panelCanvas != null) SetCanvasVisible(_panelCanvas, false);
         }
 
         private void SendCurrent()
@@ -454,6 +508,8 @@ namespace AICompanion.Unity
                 foreach (var message in page.Messages) RenderMessage(message, false, false);
                 _hasOlder = page.HasOlder;
                 _oldestVisible = page.Messages.FirstOrDefault()?.TimestampUtc;
+                var latestAssistant = page.Messages.LastOrDefault(x => x.Role == ChatRole.Assistant);
+                if (latestAssistant != null && _dialogueText != null) _dialogueText.text = latestAssistant.Content;
                 ScrollBottom();
             }
             catch (Exception ex) { ShowError("读取聊天记录失败：" + ex.GetType().Name); }
@@ -575,11 +631,72 @@ namespace AICompanion.Unity
             _scroll.verticalNormalizedPosition = 0f;
         }
 
-        private void ToggleSettings()
+        private void ShowHistory()
         {
-            if (_settingsPage == null) return;
-            _settingsPage.SetActive(!_settingsPage.activeSelf);
+            if (_panelCanvas == null || _settingsPage == null) return;
+            _settingsPage.SetActive(false);
+            if (_archiveTitle != null) _archiveTitle.text = "AI 对话记录";
+            SetCanvasVisible(_panelCanvas, true);
             PlayClickSound();
+        }
+
+        private void ShowSettings()
+        {
+            if (_panelCanvas == null || _settingsPage == null) return;
+            _settingsPage.SetActive(true);
+            _settingsPage.transform.SetAsLastSibling();
+            if (_archiveTitle != null) _archiveTitle.text = "AI 设置";
+            SetCanvasVisible(_panelCanvas, true);
+            PlayClickSound();
+        }
+
+        private void HideArchive()
+        {
+            if (_panelCanvas == null) return;
+            SetCanvasVisible(_panelCanvas, false);
+            PlayCancelSound();
+        }
+
+        private static void SetCanvasVisible(CanvasGroup canvas, bool visible)
+        {
+            canvas.alpha = visible ? 1f : 0f;
+            canvas.interactable = visible;
+            canvas.blocksRaycasts = visible;
+        }
+
+        private async Task FadeDialogueTextAsync(string value, CancellationToken cancellationToken)
+        {
+            if (_dialogueText == null) return;
+            var text = _dialogueText;
+            text.text = value;
+            text.maxVisibleCharacters = int.MaxValue;
+            text.ForceMeshUpdate();
+            var count = text.textInfo.characterCount;
+            if (count == 0) return;
+
+            const float characterDelay = 0.038f;
+            const float fadeDuration = 0.18f;
+            var started = Time.unscaledTime;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                text.ForceMeshUpdate();
+                var elapsed = Time.unscaledTime - started;
+                var finished = true;
+                for (var i = 0; i < text.textInfo.characterCount; i++)
+                {
+                    var character = text.textInfo.characterInfo[i];
+                    if (!character.isVisible) continue;
+                    var progress = Mathf.Clamp01((elapsed - i * characterDelay) / fadeDuration);
+                    if (progress < 1f) finished = false;
+                    var colors = text.textInfo.meshInfo[character.materialReferenceIndex].colors32;
+                    var alpha = (byte)Mathf.RoundToInt(255f * progress * progress * (3f - 2f * progress));
+                    for (var vertex = 0; vertex < 4; vertex++) colors[character.vertexIndex + vertex].a = alpha;
+                }
+                text.UpdateVertexData(TMP_VertexDataUpdateFlags.Colors32);
+                if (finished) break;
+                await Task.Delay(16, cancellationToken);
+            }
         }
 
         private TMP_Text CreateText(string name, Transform parent, string text, float size, TextAlignmentOptions alignment)

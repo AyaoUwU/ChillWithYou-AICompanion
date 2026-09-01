@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.chillwithyou.aicompanion",
   "name": "Chill With You AI Companion",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "target": {
     "platform": "Windows-x64",
     "unity": "2022.3.62f2",

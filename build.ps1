@@ -40,6 +40,6 @@ foreach ($name in '.doorstop_version','changelog.txt','doorstop_config.ini','win
 }
 Copy-Item -LiteralPath (Join-Path $bepInExSource 'BepInEx\core') -Destination (Join-Path $distRoot 'BepInEx') -Recurse -Force
 
-$zip = Join-Path $projectRoot 'dist\ChillWithYou-AICompanion-1.0.2.zip'
+$zip = Join-Path $projectRoot 'dist\ChillWithYou-AICompanion-1.1.0.zip'
 Compress-Archive -Path (Join-Path $distRoot '*') -DestinationPath $zip -CompressionLevel Optimal -Force
 Write-Host "Built and tested: $zip"

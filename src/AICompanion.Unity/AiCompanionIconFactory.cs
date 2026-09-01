@@ -24,7 +24,7 @@ namespace AICompanion.Unity
 
         private static Sprite CreateCircle()
         {
-            const int size = 72;
+            const int size = 88;
             var texture = CreateTexture("AICompanion.IconCircle", size);
             var pixels = new Color32[size * size];
             var center = (size - 1) * 0.5f;
@@ -32,7 +32,7 @@ namespace AICompanion.Unity
             for (var x = 0; x < size; x++)
             {
                 var radius = Vector2.Distance(new Vector2(x, y), new Vector2(center, center));
-                var alpha = radius <= 32.5f ? (byte)255 : radius < 34f ? (byte)Mathf.RoundToInt((34f - radius) / 1.5f * 255f) : (byte)0;
+                var alpha = radius <= 34f ? (byte)255 : radius < 35.5f ? (byte)Mathf.RoundToInt((35.5f - radius) / 1.5f * 255f) : (byte)0;
                 pixels[y * size + x] = new Color32(255, 255, 255, alpha);
             }
             return FinishSprite(texture, pixels, "AICompanion.IconCircle");
@@ -40,7 +40,7 @@ namespace AICompanion.Unity
 
         private static Sprite CreateHoverRing()
         {
-            const int size = 72;
+            const int size = 88;
             var texture = CreateTexture("AICompanion.IconHoverRing", size);
             var pixels = new Color32[size * size];
             var center = (size - 1) * 0.5f;
@@ -48,10 +48,10 @@ namespace AICompanion.Unity
             for (var x = 0; x < size; x++)
             {
                 var radius = Vector2.Distance(new Vector2(x, y), new Vector2(center, center));
-                if (radius < 31.5f || radius > 35f) { pixels[y * size + x] = new Color32(0, 0, 0, 0); continue; }
+                if (radius < 33.5f || radius > 37f) { pixels[y * size + x] = new Color32(0, 0, 0, 0); continue; }
                 var blend = Mathf.Clamp01((x + y) / (float)(size * 2));
                 var color = Color32.Lerp(new Color32(28, 207, 235, 255), new Color32(235, 47, 172, 255), blend);
-                var edge = Mathf.Min(Mathf.Clamp01((radius - 31.5f) * 2f), Mathf.Clamp01((35f - radius) * 2f));
+                var edge = Mathf.Min(Mathf.Clamp01((radius - 33.5f) * 2f), Mathf.Clamp01((37f - radius) * 2f));
                 color.a = (byte)Mathf.RoundToInt(edge * 255f);
                 pixels[y * size + x] = color;
             }

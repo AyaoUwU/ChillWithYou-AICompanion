@@ -229,7 +229,7 @@ namespace AICompanion.Unity
             AboveButton = above,
             BelowButton = below,
             SiblingIndex = Math.Max(above.transform.GetSiblingIndex(), below.transform.GetSiblingIndex()),
-            TargetScreenCenter = new Vector2(Screen.width - 60f, Screen.height * (311f / 1017f)),
+            TargetScreenCenter = new Vector2(Screen.width - 62f, Screen.height * (301f / 1017f)),
             CanvasPath = PathOf(canvas.transform),
             ToolbarPath = PathOf(parent),
             ReferenceButtonPath = PathOf(reference.transform)
